@@ -1,0 +1,968 @@
+{
+  "name": "Bengaluru Fresher Job Alerts (LinkedIn + Naukri + Hirist -> Groq -> Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Bengaluru Fresher Job Alert\n**Setup (2 min)**\n1. Credentials: create a *Header Auth* credential for Groq (Name: `Authorization`, Value: `Bearer gsk_xxx`) and select it on the **Groq Summarise** node. Create a *Telegram* credential (BotFather token) and select it on **Send to Telegram**.\n2. Open **Config** and set your `telegramChatId` (message @userinfobot to get it).\n3. Edit keywords in **Build Queries** and your profile in **Config** if needed.\n4. Click **Execute workflow**.\n\n**Notes**\n- Duplicates are removed (same company + title, across all sites AND across earlier runs) by the **Remove Already-Sent Jobs** node.\n- LinkedIn uses the public guest endpoint. Naukri/Hirist use unofficial JSON endpoints and may be blocked (captcha/403). Failed requests are skipped, so the run still completes.\n- Groq free tier is rate limited, so jobs are processed one at a time with a wait.",
+        "height": 420,
+        "width": 520
+      },
+      "id": "e781a559-7a72-49f7-8492-438c7def838c",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        60
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e3de8dd5-1de5-433c-9db3-1694091d9532",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ca85efc4-4da6-4c21-9f90-265821814d17",
+              "name": "telegramChatId",
+              "value": "YOUR_TELEGRAM_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "fc104777-a993-4fe7-8ea6-1334b164433c",
+              "name": "postedWithinHours",
+              "value": 24,
+              "type": "number"
+            },
+            {
+              "id": "3bf3a1ed-03ef-4f0d-bc91-b383766691e1",
+              "name": "maxJobsPerRun",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "1cc89e9e-899b-4eae-9287-deb12fbbc91a",
+              "name": "groqModel",
+              "value": "llama-3.3-70b-versatile",
+              "type": "string"
+            },
+            {
+              "id": "fd827963-f6ee-47da-b78c-94eda8b2dd3b",
+              "name": "candidateProfile",
+              "value": "Final-year cybersecurity engineering student (graduating 2027), fresher with 0-1 year experience. Background: SOC operations (TryHackMe SOC L1), VAPT / ethical hacking (internship at Hackup Technology), GRC, EC-Council CSA certified. Also builds full-stack / Python / Django projects. Targets entry-level roles in Bengaluru.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "da03c067-6dee-4013-ac43-b2bb5434e106",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\n\n// ---- EDIT YOUR KEYWORDS HERE ----\nconst keywords = [\n  'Node.js backend developer', 'backend developer', 'Python developer', 'Django developer',\n  'AI engineer', 'AI developer', 'AI application developer', 'Generative AI', 'RAG LangChain', 'LangGraph',\n  'SOC analyst L1', 'VAPT', 'network security',\n  'full stack developer', 'web developer', 'C programming'\n];\n\nconst hours = Number(cfg.postedWithinHours) || 24;\nconst days = Math.max(1, Math.ceil(hours / 24));\nconst out = [];\n\nfor (const kw of keywords) {\n  const q = encodeURIComponent(kw);\n  const slug = kw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n\n  // LinkedIn (public guest endpoint). f_E=1,2 => Internship + Entry level\n  out.push({ json: { source: 'linkedin', keyword: kw,\n    url: `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${q}&location=${encodeURIComponent('Bengaluru, Karnataka, India')}&f_E=1%2C2&f_TPR=r${hours * 3600}&start=0` } });\n\n  // Naukri (unofficial JSON endpoint). experience=0 => fresher\n  out.push({ json: { source: 'naukri', keyword: kw,\n    url: `https://www.naukri.com/jobapi/v3/search?noOfResults=20&urlType=search_by_keyword&searchType=adv&keyword=${q}&location=bengaluru&k=${q}&l=bengaluru&experience=0&jobAge=${days}&sort=f&pageNo=1&src=jobsearchDesk&seoKey=${slug}-jobs-in-bengaluru&sid=` } });\n\n  // Hirist (unofficial JSON endpoint - may need adjusting)\n  out.push({ json: { source: 'hirist', keyword: kw,\n    url: `https://gladiator.hirist.tech/job/search?pageNo=0&query=${q}&minexp=0&maxexp=1&range=0&boolean=true&searchRange=${days}` } });\n}\nreturn out;"
+      },
+      "id": "6e75e7b1-9bac-4bf8-803e-9a11d5ee8899",
+      "name": "Build Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "08f61a08-4e62-447b-8194-0333b2ff978e",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "linkedin",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "linkedin"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a48e01d5-1b80-4b08-af2f-d00716cea83a",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "naukri",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "naukri"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d5c78372-5724-4146-ad38-a95e25121aa2",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "hirist",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "hirist"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15972b07-b76a-4320-90bc-933f092d9676",
+      "name": "Route by Source",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "581d7882-b2cd-4680-971f-aa452377b5e3",
+      "name": "LinkedIn Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "appid",
+              "value": "109"
+            },
+            {
+              "name": "systemid",
+              "value": "109"
+            },
+            {
+              "name": "clientid",
+              "value": "d3skt0p"
+            },
+            {
+              "name": "Referer",
+              "value": "https://www.naukri.com/"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "4ca4d528-e60c-4703-b912-ac04b6768c91",
+      "name": "Naukri Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Origin",
+              "value": "https://www.hirist.tech"
+            },
+            {
+              "name": "Referer",
+              "value": "https://www.hirist.tech/"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "02f371f4-92a4-4780-bd20-03e2cb9a6b42",
+      "name": "Hirist Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"').replace(/\\s+/g, ' ').trim();\nconst jobs = [];\nfor (const it of $input.all()) {\n  const html = it.json.data;\n  if (typeof html !== 'string') continue;\n  for (const c of html.split(/<li[^>]*>/).slice(1)) {\n    const id = (c.match(/jobPosting:(\\d+)/) || [])[1];\n    if (!id) continue;\n    const title = strip((c.match(/base-search-card__title[^>]*>([\\s\\S]*?)<\\/h3>/) || [])[1]);\n    const company = strip((c.match(/base-search-card__subtitle[^>]*>([\\s\\S]*?)<\\/h4>/) || [])[1]);\n    const location = strip((c.match(/job-search-card__location[^>]*>([\\s\\S]*?)<\\/span>/) || [])[1]);\n    const link = (((c.match(/base-card__full-link[^>]*href=\"([^\"]+)\"/) || [])[1]) || ((c.match(/href=\"([^\"]+)\"/) || [])[1]) || '').replace(/&amp;/g, '&').split('?')[0];\n    const posted = (c.match(/datetime=\"([^\"]+)\"/) || [])[1] || '';\n    if (title) jobs.push({ json: { source: 'LinkedIn', jobId: 'li-' + id, linkedinId: id, title, company, location, experience: '', link, posted, description: '' } });\n  }\n}\nreturn jobs;"
+      },
+      "id": "89c1d875-e4c5-4a66-98ab-1568c1b65bef",
+      "name": "Parse LinkedIn",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();\nconst jobs = [];\nfor (const it of $input.all()) {\n  const list = it.json.jobDetails;\n  if (!Array.isArray(list)) continue;\n  for (const j of list) {\n    const ph = j.placeholders || [];\n    const location = (ph.find(p => p.type === 'location') || {}).label || '';\n    const experience = (ph.find(p => p.type === 'experience') || {}).label || '';\n    const link = j.jdURL ? (j.jdURL.startsWith('http') ? j.jdURL : 'https://www.naukri.com' + j.jdURL) : '';\n    jobs.push({ json: { source: 'Naukri', jobId: 'nk-' + j.jobId, title: strip(j.title), company: strip(j.companyName), location, experience, link,\n      posted: j.footerPlaceholderLabel || '', description: strip(j.jobDescription) + (j.tagsAndSkills ? ' Skills: ' + j.tagsAndSkills : '') } });\n  }\n}\nreturn jobs;"
+      },
+      "id": "c56335c3-5c5e-467f-bc0e-8b6471aea9eb",
+      "name": "Parse Naukri",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();\nconst jobs = [];\nfor (const it of $input.all()) {\n  const d = it.json;\n  const list = d.jobs || (d.data && d.data.jobs) || (Array.isArray(d.data) ? d.data : null) || d.jobList || d.results || [];\n  if (!Array.isArray(list)) continue;\n  for (const j of list) {\n    const id = j.id || j.jobId;\n    if (!id) continue;\n    const location = Array.isArray(j.locations) ? j.locations.map(l => l.name || l).join(', ') : (j.location || '');\n    const company = (j.companyData && j.companyData.companyName) || j.companyName || (j.company && j.company.name) || '';\n    const skills = Array.isArray(j.skills) ? j.skills.map(s => s.name || s).join(', ') : '';\n    const experience = (j.min !== undefined && j.max !== undefined) ? `${j.min}-${j.max} Yrs` : (j.experience || '');\n    jobs.push({ json: { source: 'Hirist', jobId: 'hr-' + id, title: strip(j.title || j.jobTitle), company: strip(company), location, experience,\n      link: j.jobDetailUrl || ('https://www.hirist.tech/j/' + id), posted: j.createdTimeMs ? new Date(j.createdTimeMs).toISOString() : '', description: skills ? 'Skills: ' + skills : '' } });\n  }\n}\nreturn jobs;"
+      },
+      "id": "5292df7a-19ac-402d-b0f6-f0e33058143c",
+      "name": "Parse Hirist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "f2bf7db6-d6f4-4ed0-b408-e244c7b4ff38",
+      "name": "Merge Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cityRe = /bengaluru|bangalore|bengalore|whitefield|electronic city|koramangala|hsr layout|indiranagar|marathahalli|bellandur|sarjapur|hebbal|yelahanka|jp nagar|jayanagar|btm layout|mg road|manyata|outer ring road|domlur|kr puram|banashankari|rajajinagar|malleshwaram|devanahalli|bommanahalli|cv raman nagar|hosur road/i;\nconst seniorRe = /\\b(senior|sr\\.?|lead|principal|staff|manager|architect|head|director|vp|ii|iii|iv)\\b|\\bsde[\\s-]*(2|3|ii|iii)\\b|\\blevel\\s*[2-9]\\b/i;\nconst MAX_MIN_EXP = 1;   // job may not ask for more than this many years minimum\nconst MAX_MAX_EXP = 3;   // for \"x-y years\" labels, y may not exceed this\nconst norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\n\nconst seen = new Set();\nconst bySource = {};\nfor (const it of $input.all()) {\n  const j = it.json;\n  if (!j.title) continue;\n  if (j.location && !cityRe.test(j.location)) continue;\n  if (seniorRe.test(j.title)) continue;\n\n  const label = j.experience || '';\n  const r = label.match(/(\\d+)\\s*(?:-|–|to)\\s*(\\d+)/);\n  const s = label.match(/(\\d+)\\s*\\+?\\s*(?:years?|yrs?)/i);\n  if (r && (Number(r[1]) > MAX_MIN_EXP || Number(r[2]) > MAX_MAX_EXP)) continue;\n  if (!r && s && Number(s[1]) > MAX_MIN_EXP) continue;\n\n  const key = norm(j.company) + '|' + norm(j.title);\n  if (seen.has(key)) continue;\n  seen.add(key);\n  (bySource[j.source] = bySource[j.source] || []).push({ ...j, dedupeKey: key });\n}\n\n// interleave sources so a later Limit doesn't favour LinkedIn\nconst lists = Object.values(bySource);\nconst out = [];\nfor (let i = 0; lists.some(l => i < l.length); i++) {\n  for (const l of lists) if (i < l.length) out.push({ json: l[i] });\n}\nreturn out;"
+      },
+      "id": "b37a52a4-bba6-457a-868c-d65edea85ffd",
+      "name": "Filter Bengaluru Freshers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ 'v6|' + $json.dedupeKey }}",
+        "options": {
+          "scope": "workflow",
+          "historySize": 20000
+        }
+      },
+      "id": "bf3e437b-a680-47bc-99d4-927588fa9196",
+      "name": "Remove Already-Sent Jobs",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": "={{ (Number($('Config').first().json.maxJobsPerRun) || 30) * 2 }}"
+      },
+      "id": "7aeff6df-8edc-42d2-a2d8-dcf0beb27406",
+      "name": "Limit Jobs",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        2260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5d15a4bc-6236-4107-a0fb-08d5d82b0f39",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "LinkedIn",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e8575618-349c-440f-a2b3-d05be92369e1",
+      "name": "Is LinkedIn?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{{ $json.linkedinId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "d4228d3d-1d0b-4815-a924-f6e10144af61",
+      "name": "LinkedIn Job Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const orig = $('Limit Jobs').item.json;\nlet description = '';\nconst html = $json.data;\nif (typeof html === 'string') {\n  const m = html.match(/show-more-less-html__markup[^>]*>([\\s\\S]*?)<\\/div>/);\n  if (m) {\n    description = m[1]\n      .replace(/<br\\s*\\/?>/gi, '\\n').replace(/<\\/(p|ul|ol)>/gi, '\\n').replace(/<li[^>]*>/gi, '\\n- ')\n      .replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"')\n      .replace(/[ \\t]+/g, ' ').replace(/\\n\\s*\\n+/g, '\\n').trim();\n  }\n}\nreturn { json: { ...orig, description } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "6dca5709-0699-4abb-bc24-d616818de68f",
+      "name": "Attach LinkedIn Description",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2920,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 2
+      },
+      "id": "7c581fdc-a68f-4b67-a865-f0aa57796ba1",
+      "name": "Merge Jobs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX_MIN_EXP = 1;\nconst cap = Number($('Config').first().json.maxJobsPerRun) || 30;\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const text = `${j.title}. ${j.description || ''}`;\n  const mins = [];\n  for (const seg of text.split(/[\\n.•;]+/)) {\n    if (!/\\b(years?|yrs?)\\b/i.test(seg)) continue;\n    if (!/(experience|exp\\b|relevant|hands-on|work)/i.test(seg)) continue;\n    if (/\\b(we|our|company|founded|established)\\b/i.test(seg)) continue;\n    const range = seg.match(/(\\d+)\\s*\\+?\\s*(?:-|–|to)\\s*(\\d+)\\s*\\+?\\s*(?:years?|yrs?)/i);\n    const single = seg.match(/(\\d+)\\s*\\+?\\s*(?:years?|yrs?)/i);\n    if (range) mins.push(Number(range[1]));\n    else if (single) mins.push(Number(single[1]));\n  }\n  if (mins.length && Math.min(...mins) > MAX_MIN_EXP) continue;   // asks for 2+ years\n  if (!j.experience) j.experience = mins.length ? `${Math.min(...mins)}+ yrs (from JD)` : 'not stated';\n  out.push({ json: j });\n}\nreturn out.slice(0, cap);"
+      },
+      "id": "dce24fe8-6d61-45ce-9693-d11bff04aa05",
+      "name": "Experience Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst system = `You are a career assistant for a fresher job seeker in India. Read the job posting and answer ONLY with a valid JSON object (no markdown) with these keys:\n{\n \"summary\": \"2-3 plain sentences: what the company/role is and what you will actually do\",\n \"role_type\": \"short label e.g. Backend (Python/Django), GenAI Engineer, SOC L1, VAPT, Full Stack\",\n \"experience_required\": \"what the posting says, or 'not stated'\",\n \"fresher_friendly\": true or false,\n \"must_have_skills\": [\"max 8 core skills/tools from the posting\"],\n \"resume_keywords\": [\"8-15 ATS keywords/phrases from THIS posting that the candidate should add to the resume, only ones the candidate can truthfully claim based on their profile\"],\n \"skills_gap\": [\"up to 4 required skills the candidate seems to lack and should learn\"],\n \"fit_score\": integer 1-10 for this candidate,\n \"red_flags\": \"anything suspicious or discouraging (unpaid, senior-level, 3+ years, vague, pay-to-join) or 'none'\"\n}\nIf the posting text is short, infer carefully from the title and say so in the summary. Never invent facts.`;\n\nreturn $input.all().map(it => {\n  const j = it.json;\n  const desc = (j.description || '').slice(0, 3500);\n  const user = `CANDIDATE PROFILE:\\n${cfg.candidateProfile}\\n\\nJOB:\\nTitle: ${j.title}\\nCompany: ${j.company}\\nLocation: ${j.location}\\nExperience: ${j.experience || 'not stated'}\\nSource: ${j.source}\\n\\nDESCRIPTION:\\n${desc || '(not available - only title provided)'}`;\n  return { json: { ...j, groqBody: {\n    model: cfg.groqModel || 'llama-3.3-70b-versatile',\n    temperature: 0.2,\n    max_tokens: 800,\n    response_format: { type: 'json_object' },\n    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]\n  } } };\n});"
+      },
+      "id": "2f5728ce-9b40-4db1-a25b-60a0d4711f3e",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "3f190899-ef3d-4f82-a6ad-e787bb9cb824",
+      "name": "Loop Over Jobs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3800,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "602fb96b-c4b0-4a98-a5ed-66c12681f802",
+      "name": "All Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4020,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.groqBody) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "7805574d-a1fd-4f65-a6f3-c49db17e4df3",
+      "name": "Groq Summarise",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4020,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 8000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let job;\ntry { job = $('Loop Over Jobs').item.json; } catch (e) { job = $('Loop Over Jobs').first().json; }\n\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nlet ai = null;\ntry {\n  const content = $json.choices[0].message.content;\n  ai = JSON.parse(content);\n} catch (e) { ai = null; }\n\nconst lines = [];\nlines.push(`🆕 <b>${esc(job.title)}</b>`);\nlines.push(`🏢 ${esc(job.company || 'N/A')}  ·  📍 ${esc(job.location || 'Bengaluru')}  ·  🔎 ${esc(job.source)}`);\nif (job.experience) lines.push(`💼 Exp: ${esc(job.experience)}`);\nif (job.posted) lines.push(`🕒 ${esc(job.posted)}`);\nlines.push('');\n\nif (ai) {\n  lines.push(`📝 ${esc(ai.summary)}`);\n  lines.push('');\n  lines.push(`🎯 <b>Fit:</b> ${esc(ai.fit_score)}/10  |  <b>Type:</b> ${esc(ai.role_type)}  |  <b>Fresher-friendly:</b> ${ai.fresher_friendly ? 'Yes' : 'No'}`);\n  if (ai.experience_required) lines.push(`📅 <b>Experience asked:</b> ${esc(ai.experience_required)}`);\n  if (Array.isArray(ai.must_have_skills) && ai.must_have_skills.length) lines.push(`🛠 <b>Must-have:</b> ${esc(ai.must_have_skills.join(', '))}`);\n  if (Array.isArray(ai.resume_keywords) && ai.resume_keywords.length) {\n    lines.push('');\n    lines.push(`🔑 <b>Add to resume:</b>\\n<code>${esc(ai.resume_keywords.join(', '))}</code>`);\n  }\n  if (Array.isArray(ai.skills_gap) && ai.skills_gap.length) lines.push(`📚 <b>Learn:</b> ${esc(ai.skills_gap.join(', '))}`);\n  if (ai.red_flags && String(ai.red_flags).toLowerCase() !== 'none') lines.push(`⚠️ ${esc(ai.red_flags)}`);\n} else {\n  lines.push('⚠️ AI summary unavailable for this job (Groq error or rate limit).');\n}\nlines.push('');\nlines.push(job.link ? `🔗 <a href=\"${esc(job.link)}\">Apply / View job</a>` : '🔗 No link found');\n\nlet text = lines.join('\\n');\nif (text.length > 4000) text = text.slice(0, 3990) + '…';\nreturn { json: { text } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "8c56395a-f9ac-4201-848b-c0f693c62286",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "cfdf111f-d9a1-4722-8068-861e7b697138",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4460,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "bd2e2565-ff3c-4cd6-a43e-bcba01432ff3",
+      "name": "Wait (Groq rate limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4680,
+        200
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Build Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Queries": {
+      "main": [
+        [
+          {
+            "node": "Route by Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Source": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Naukri Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hirist Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Search": {
+      "main": [
+        [
+          {
+            "node": "Parse LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Naukri Search": {
+      "main": [
+        [
+          {
+            "node": "Parse Naukri",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hirist Search": {
+      "main": [
+        [
+          {
+            "node": "Parse Hirist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Naukri": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Parse Hirist": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "Filter Bengaluru Freshers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Bengaluru Freshers": {
+      "main": [
+        [
+          {
+            "node": "Remove Already-Sent Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Already-Sent Jobs": {
+      "main": [
+        [
+          {
+            "node": "Limit Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Jobs": {
+      "main": [
+        [
+          {
+            "node": "Is LinkedIn?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is LinkedIn?": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Job Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Jobs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "LinkedIn Job Details": {
+      "main": [
+        [
+          {
+            "node": "Attach LinkedIn Description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach LinkedIn Description": {
+      "main": [
+        [
+          {
+            "node": "Merge Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Jobs": {
+      "main": [
+        [
+          {
+            "node": "Experience Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Experience Check": {
+      "main": [
+        [
+          {
+            "node": "Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prompt": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Jobs": {
+      "main": [
+        [
+          {
+            "node": "All Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Groq Summarise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Summarise": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Wait (Groq rate limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (Groq rate limit)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
