@@ -44,7 +44,7 @@ The **Config** node includes:
 | `telegramChatId` | `YOUR_TELEGRAM_CHAT_ID` | Telegram chat or group to receive alerts |
 | `postedWithinHours` | `24` | How recently a job should have been posted |
 | `maxJobsPerRun` | `30` | Maximum jobs analyzed and sent in one run |
-| `groqModel` | `llama-3.3-70b-versatile` | Groq chat-completion model |
+| `groqModel` | `openai/gpt-oss-120b` | Groq chat-completion model |
 | `candidateProfile` | Example fresher profile | Profile used to assess fit and suggest resume keywords |
 
 Edit the `keywords` array in the **Build Queries** node to change the searches. The location and experience checks are implemented in the **Filter Bengaluru Freshers** and **Experience Check** nodes.
